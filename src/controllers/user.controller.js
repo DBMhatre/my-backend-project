@@ -167,7 +167,7 @@ const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
     {
-      $set: { refreshToken: undefined },
+      $unset: { refreshToken: 1 },
     },
     { new: true }
   );
@@ -265,7 +265,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     throw new ApiError(400, "All fields are required!");
   }
 
-  const user = User.findByIdAndUpdate(
+  const user = await User.findByIdAndUpdate(
     req.user._id,
     { $set: { fullName, email } },
     { new: true }
@@ -377,6 +377,8 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
           },
         },
       },
+    },
+    {
       $project: {
         fullName: 1,
         email: 1,
@@ -449,12 +451,15 @@ const getWatchHistory = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(400, "User not found!");
   }
-
-  return res.status(
-    200,
-    user[0].watchHistory,
-    "Watch history fetched successfully!"
-  );
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0].watchHistory,
+        "Watch history fetched successfully"
+      )
+    );
 });
 
 export {
