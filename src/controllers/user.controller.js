@@ -1,8 +1,11 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { ApiError } from "../utils/ApiErrors.js";
+import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import {
+  deleteImgOnCloudinary,
+  uploadImgOnCloudinary,
+} from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
@@ -57,6 +60,7 @@ const registerUser = asyncHandler(async (req, res) => {
   // const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
   let coverImageLocalPath;
+  let coverImage;
 
   if (
     req.files &&
@@ -64,6 +68,7 @@ const registerUser = asyncHandler(async (req, res) => {
     req.files.coverImage.length > 0
   ) {
     coverImageLocalPath = req.files?.coverImage[0]?.path;
+    coverImage = await uploadImgOnCloudinary(coverImageLocalPath);
   }
 
   // 4)
@@ -71,8 +76,7 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Avatar file is required!");
   }
 
-  const avatar = await uploadOnCloudinary(avatarLocalPath);
-  const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+  const avatar = await uploadImgOnCloudinary(avatarLocalPath);
 
   // 5)
   if (!avatar) {
@@ -285,13 +289,25 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Avatar is missing!");
   }
 
-  const avatar = await uploadOnCloudinary(avatarLocalPath);
+  const avatar = await uploadImgOnCloudinary(avatarLocalPath);
 
   if (!avatar.url) {
     throw new ApiError(401, "Error while uploading Avatar on Clodinary!");
   }
 
-  const user = await User.findByIdAndUpdate(
+  const user = await User.findById(req.user?._id);
+
+  if (!user) {
+    throw new ApiError(400, "User not found!");
+  }
+
+  const avatarId = user.avatar.split("/").at(-1).split(".")[0];
+
+  const deletedAvatar = await deleteImgOnCloudinary(avatarId);
+
+  console.log("ID's", deletedAvatar);
+
+  const userRes = await User.findByIdAndUpdate(
     req.user?._id,
     { $set: { avatar: avatar.url } },
     { new: true }
@@ -299,7 +315,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, user, "Avatar Updated successfully!"));
+    .json(new ApiResponse(200, userRes, "Avatar Updated successfully!"));
 });
 
 const updateUserCoverImage = asyncHandler(async (req, res) => {
@@ -309,13 +325,25 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     throw new ApiError(400, "coverImage is missing!");
   }
 
-  const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+  const coverImage = await uploadImgOnCloudinary(coverImageLocalPath);
 
   if (!coverImage.url) {
     throw new ApiError(401, "Error while uploading coverImage on Clodinary!");
   }
 
-  const user = await User.findByIdAndUpdate(
+  const user = await User.findById(req.user?._id);
+
+  if (!user) {
+    throw new ApiError(400, "User not found!");
+  }
+
+  const coverImageId = user.coverImage.split("/").at(-1).split(".")[0];
+
+  const deletedCoverImage = await deleteImgOnCloudinary(coverImageId);
+
+  console.log("ID's", deletedCoverImage);
+
+  const userRes = await User.findByIdAndUpdate(
     req.user?._id,
     { $set: { coverImage: coverImage.url } },
     { new: true }
@@ -323,7 +351,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, user, "coverImage Updated successfully!"));
+    .json(new ApiResponse(200, userRes, "coverImage Updated successfully!"));
 });
 
 const getUserChannelProfile = asyncHandler(async (req, res) => {
@@ -349,7 +377,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
       },
     },
 
-    //to get the Subscribers => We find all the Doc with, "Subscriber_Name === User_Name"
+    //to get the SubscribedTo => We find all the Doc with, "Subscriber_Name === User_Name"
 
     {
       $lookup: {
@@ -417,33 +445,33 @@ const getWatchHistory = asyncHandler(async (req, res) => {
         foreignField: "_id",
         as: "watchHistory",
 
-        pipeline: [
-          {
-            $lookup: {
-              from: "users",
-              localField: "owner",
-              foreignField: "_id",
-              as: "owner",
+        // pipeline: [
+        //   {
+        //     $lookup: {
+        //       from: "users",
+        //       localField: "owner",
+        //       foreignField: "_id",
+        //       as: "owner",
 
-              pipeline: [
-                {
-                  $project: {
-                    fullName: 1,
-                    username: 1,
-                    avatar: 1,
-                  },
-                },
-              ],
-            },
-          },
-          {
-            $addFields: {
-              owner: {
-                $first: "$owner",
-              },
-            },
-          },
-        ],
+        //       pipeline: [
+        //         {
+        //           $project: {
+        //             fullName: 1,
+        //             username: 1,
+        //             avatar: 1,
+        //           },
+        //         },
+        //       ],
+        //     },
+        //   },
+        //   {
+        //     $addFields: {
+        //       owner: {
+        //         $first: "$owner",
+        //       },
+        //     },
+        //   },
+        // ],
       },
     },
   ]);
